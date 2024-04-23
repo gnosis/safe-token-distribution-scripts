@@ -119,10 +119,10 @@ os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
 with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer = csv.writer(f, delimiter=',')
     writer.writerow(csv_header)
-    # import pdb; pdb.set_trace()
     for row in ethereum_rows:
         share = Decimal(row[2])
-        writer.writerow((row[0], row[1], share))
+        # round shares up
+        writer.writerow((row[0], row[1], "%.10f" % share))
 
 
 # Create CSV for GNOSIS
@@ -135,7 +135,8 @@ with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer.writerow(csv_header)
     for row in gnosis_rows:
         share = Decimal(row[2])
-        writer.writerow((row[0], row[1], share))
+        # round shares up
+        writer.writerow((row[0], row[1], "%.10f" % share))
 
 connection.close()
 
