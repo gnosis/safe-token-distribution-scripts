@@ -1,3 +1,4 @@
+from decimal import Decimal
 import sqlite3
 import csv
 import os
@@ -5,8 +6,8 @@ import os
 
 
 SAFE_ALLOCATION = 9000000
-ETHEREUM_FINAL_ALLOCATION_FILE = "csv/final/Safe_token_distro_-_Ethereum.csv"
-GNOSIS_FINAL_ALLOCATION_FILE = "csv/final/Safe_token_distro_-_Gnosis.csv"
+ETHEREUM_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Ethereum.csv"
+GNOSIS_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Gnosis.csv"
 
 
 connection = sqlite3.connect("allocations_step1.sql")
@@ -105,8 +106,8 @@ if len(allocation_exclusions) > 0:
     ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
     gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
 else:
-    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" group by user" % eligible_gno
-    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" group by user" % eligible_gno
+    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" group by user" % (eligible_gno)
+    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" group by user" % (eligible_gno)
 
 # Create CSV for ETHEREUM
 cursor.execute(ethereum_query)
@@ -116,9 +117,12 @@ csv_header = ["Address", "Score", "Allocation"]
 
 os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
 with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
-    writer = csv.writer(f)
+    writer = csv.writer(f, delimiter=',')
     writer.writerow(csv_header)
-    writer.writerows(ethereum_rows)
+    # import pdb; pdb.set_trace()
+    for row in ethereum_rows:
+        share = Decimal(row[2])
+        writer.writerow((row[0], row[1], share))
 
 
 # Create CSV for GNOSIS
@@ -127,9 +131,11 @@ gnosis_rows = cursor.fetchall()
 
 os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
 with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
-    writer = csv.writer(f)
+    writer = csv.writer(f, delimiter=',')
     writer.writerow(csv_header)
-    writer.writerows(gnosis_rows)
+    for row in gnosis_rows:
+        share = Decimal(row[2])
+        writer.writerow((row[0], row[1], share))
 
 connection.close()
 
@@ -142,14 +148,14 @@ connection.close()
 eth_score = 0
 gno_score = 0
 
-file = open('csv/final/Safe_token_distro_-_Ethereum.csv', 'r')
+file = open(ETHEREUM_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
     eth_score += float(r[2])
 
 
-file = open('csv/final/Safe_token_distro_-_Gnosis.csv', 'r')
+file = open(GNOSIS_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
