@@ -103,11 +103,11 @@ print("> 1 GNO = %f SAFE" % safe_per_gno)
 allocation_exclusions = ["00 credentials"]
 
 if len(allocation_exclusions) > 0:
-    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
-    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
+    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"ethereum\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
+    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"gnosis\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
 else:
-    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" group by user" % (eligible_gno)
-    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" group by user" % (eligible_gno)
+    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"ethereum\" group by user" % (eligible_gno)
+    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"gnosis\" group by user" % (eligible_gno)
 
 # Create CSV for ETHEREUM
 cursor.execute(ethereum_query)
@@ -121,7 +121,8 @@ with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer.writerow(csv_header)
     for row in ethereum_rows:
         score = "%.10f" % Decimal(row[2])
-        writer.writerow((row[0], score, row[1]))
+        allocation = row[2]*SAFE_ALLOCATION
+        writer.writerow((row[0], score, allocation))
 
 
 # Create CSV for GNOSIS
@@ -134,7 +135,8 @@ with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer.writerow(csv_header)
     for row in gnosis_rows:
         score = "%.10f" % Decimal(row[2])
-        writer.writerow((row[0], score, row[1]))
+        allocation = row[2]*SAFE_ALLOCATION
+        writer.writerow((row[0], score, allocation))
 
 connection.close()
 
