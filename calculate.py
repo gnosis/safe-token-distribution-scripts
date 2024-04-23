@@ -1,9 +1,12 @@
 import sqlite3
 import csv
+import os
 
 
 
 SAFE_ALLOCATION = 9000000
+ETHEREUM_FINAL_ALLOCATION_FILE = "csv/final/Safe_token_distro_-_Ethereum.csv"
+GNOSIS_FINAL_ALLOCATION_FILE = "csv/final/Safe_token_distro_-_Gnosis.csv"
 
 
 connection = sqlite3.connect("allocations_step1.sql")
@@ -84,10 +87,75 @@ connection.commit()
 
 cursor.execute("select sum(value) from allocations_intermediate")
 eligible_gno = cursor.fetchone()[0]
-connection.close()
 
 safe_per_gno = SAFE_ALLOCATION / eligible_gno
 
 print("> Eligible users: %s" % n_eligible_users)
 print("> Eligible GNO: %s" % eligible_gno)
 print("> 1 GNO = %f SAFE" % safe_per_gno)
+
+
+#==============================
+# CALCULATE FINAL ALLOCATIONS
+#==============================
+
+allocation_exclusions = ["00 credentials"]
+
+if len(allocation_exclusions) > 0:
+    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
+    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
+else:
+    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"ethereum\" group by user" % eligible_gno
+    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as share from allocations_intermediate where chain = \"gnosis\" group by user" % eligible_gno
+
+# Create CSV for ETHEREUM
+cursor.execute(ethereum_query)
+ethereum_rows = cursor.fetchall()
+
+csv_header = ["Address", "Score", "Allocation"]
+
+os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
+with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(csv_header)
+    writer.writerows(ethereum_rows)
+
+
+# Create CSV for GNOSIS
+cursor.execute(gnosis_query)
+gnosis_rows = cursor.fetchall()
+
+os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
+with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
+    writer = csv.writer(f)
+    writer.writerow(csv_header)
+    writer.writerows(gnosis_rows)
+
+connection.close()
+
+
+
+#==============================
+#    DOUBLE-CHECK SCORES
+#==============================
+
+eth_score = 0
+gno_score = 0
+
+file = open('csv/final/Safe_token_distro_-_Ethereum.csv', 'r')
+rows = csv.reader(file)
+next(rows, None)
+for r in rows:
+    eth_score += float(r[2])
+
+
+file = open('csv/final/Safe_token_distro_-_Gnosis.csv', 'r')
+rows = csv.reader(file)
+next(rows, None)
+for r in rows:
+    gno_score += float(r[2])
+
+
+print("> ETH overall score: %f" % eth_score)
+print("> GNO overall score: %f" % gno_score)
+print("> Total score: %f " % (eth_score+gno_score))
