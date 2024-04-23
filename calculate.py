@@ -16,7 +16,7 @@ cursor = connection.cursor()
 cursor.execute("CREATE TABLE lgno_ethereum (user varchar(255), value float);")
 cursor.execute("CREATE TABLE lgno_gnosis (user varchar(255), value float);")
 cursor.execute("CREATE TABLE gno_validators (user varchar(255), value float);")
-cursor.execute("CREATE TABLE sgno (user varchar(255), dt text, value float);")
+cursor.execute("CREATE TABLE sgno (user varchar(255), value float);")
 
 
 #=====================================
@@ -51,7 +51,7 @@ with open('csv/active_validator_list_with_00.csv', 'r') as file:
 
 
 # GNO VALIDATORS
-with open('csv/sGNO_LPs_aggregated.csv', 'r') as file:
+with open('csv/sGNO_LPs.csv', 'r') as file:
     rows = csv.reader(file)
     next(rows, None)  # skip CSV headers
     insert_dml = "INSERT INTO sgno (user, value) VALUES(?, ?)"
@@ -120,9 +120,8 @@ with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer = csv.writer(f, delimiter=',')
     writer.writerow(csv_header)
     for row in ethereum_rows:
-        share = Decimal(row[2])
-        # round shares up
-        writer.writerow((row[0], row[1], "%.10f" % share))
+        score = "%.10f" % Decimal(row[2])
+        writer.writerow((row[0], score, row[1]))
 
 
 # Create CSV for GNOSIS
@@ -134,9 +133,8 @@ with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
     writer = csv.writer(f, delimiter=',')
     writer.writerow(csv_header)
     for row in gnosis_rows:
-        share = Decimal(row[2])
-        # round shares up
-        writer.writerow((row[0], row[1], "%.10f" % share))
+        score = "%.10f" % Decimal(row[2])
+        writer.writerow((row[0], score, row[1]))
 
 connection.close()
 
@@ -153,14 +151,14 @@ file = open(ETHEREUM_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    eth_score += float(r[2])
+    eth_score += float(r[1])
 
 
 file = open(GNOSIS_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    gno_score += float(r[2])
+    gno_score += float(r[1])
 
 
 print("> ETH overall score: %f" % eth_score)
