@@ -4,7 +4,7 @@ import csv
 import os
 
 from web3 import Web3
-from dotenv import load_dotenv, dotenv_values 
+from dotenv import load_dotenv 
 
 
 # load variables from .env file
@@ -87,7 +87,7 @@ n_eligible_users = c_1[0] + c_2[0] + c_3[0] + c_4[0]
 allocation_exclusions_not_diluted = ["00 credentials"]
 
 # List of addresses that are not receiving the airdrop, whose tokens are distributed to rest of users 
-allocations_exclusions_diluted = ["0x2686d5e477d1aaa58bf8ce598fa95d97985c7fb1"]
+allocations_exclusions_diluted = ["0x2686d5e477d1aaa58bf8ce598fa95d97985c7fb1", "0xfc9b67b6034f6b306ea9bd8ec1baf3efa2490394"]
 
 # we know that the sum of all eligible GNOs is equal to 9M SAFEs
 cursor.execute("CREATE TABLE allocations_intermediate (user varchar(255), value float, chain varchar(10))")
@@ -109,7 +109,6 @@ connection.commit()
 # Calculate amount of eligible GNO
 cursor.execute("select sum(value) from allocations_intermediate")
 eligible_gno = Decimal(cursor.fetchone()[0])
-
 safe_per_gno = SAFE_ALLOCATION / eligible_gno
 
 
@@ -125,14 +124,12 @@ if len(allocation_exclusions_not_diluted) > 0:
     ethereum_query = allocations_query_part1 % (eligible_gno, 'ethereum') + " and lower(user) not in (\"%s\") group by user" % (','.join(allocation_exclusions_not_diluted))
     gnosis_query = allocations_query_part1 % (eligible_gno, 'gnosis') + " and lower(user) not in (\"%s\") group by user" % (','.join(allocation_exclusions_not_diluted))
 else:
-    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"ethereum\" group by user" % (eligible_gno)
-    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"gnosis\" group by user" % (eligible_gno)
+    ethereum_query = allocations_query_part1 % (eligible_gno, 'ethereum')  + " group by user"
+    gnosis_query = allocations_query_part1 % (eligible_gno, 'gnosis')  + " group by user"
 
 # Create CSV for ETHEREUM
 cursor.execute(ethereum_query)
 ethereum_rows = cursor.fetchall()
-
-csv_header = ["Address", "Score", "Allocation"]
 
 w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
 os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
@@ -141,6 +138,7 @@ os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
 # Start creating Safe_token_distro_-_Gnosis.csv
 gno_csv = open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='')
 gno_writer = csv.writer(gno_csv, delimiter=',')
+csv_header = ["Address", "Score", "Allocation"]
 gno_writer.writerow(csv_header)
 
 # Start creating Safe_token_distro_-_Ethereum.csv
@@ -179,28 +177,29 @@ connection.close()
 #    DOUBLE-CHECK SCORES
 #==============================
 
-eth_score = Decimal(0)
-gno_score = Decimal(0)
+check_eth_score = Decimal(0)
+check_gno_score = Decimal(0)
 
 file = open(ETHEREUM_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    eth_score += Decimal(r[1])
+    check_eth_score += Decimal(r[1])
 
 
 file = open(GNOSIS_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    gno_score += Decimal(r[1])
+    check_gno_score += Decimal(r[1])
 
-total_score = eth_score + gno_score
+check_total_score = check_eth_score + check_gno_score
+
 print("============= STATS =============")
 print("> Eligible users: %s" % n_eligible_users)
 print("> Eligible GNO: %s" % eligible_gno)
 print("> 1 GNO = %f SAFE" % safe_per_gno)
-print("> ETH overall score: %f" % eth_score)
-print("> GNO overall score: %f" % gno_score)
-print("> Total score: %f " % total_score)
+print("> ETH overall score: %f" % check_eth_score)
+print("> GNO overall score: %f" % check_gno_score)
+print("> Total score: %f " % check_total_score)
 print("=================================")
