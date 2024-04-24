@@ -31,13 +31,21 @@ eth_allocation_rows = csv.reader(eth_allocation_file)
 next(eth_allocation_rows, None) # skip CSV headers
 
 eth_distro_object = {}
+eth_n_accounts = 0 # count number of accounts in JSON file
 for r in eth_allocation_rows:
-    eth_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
+    # handle multiple accounts on the same file, just sum amounts
+    if eth_distro_object.get(r[0], None):
+        eth_distro_object[r[0]] += Web3.to_wei(r[2], 'gwei')
+    else:
+        eth_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
+
     # for stats purpose
     allocated_eth += Web3.to_wei(r[2], 'gwei')
+    eth_n_accounts += 1
 
 with open(ETHEREUM_DISTRO_JSON_FILE, 'w+') as eth_distro_file:
     eth_distro_file.write(json.dumps(eth_distro_object, indent=4))
+    print("> Ethereum, written %d records" % eth_n_accounts)
 
 
 #=========
@@ -49,13 +57,20 @@ gno_allocation_rows = csv.reader(gno_allocation_file)
 next(gno_allocation_rows, None) # skip CSV headers
 
 gno_distro_object = {}
+gno_n_accounts = 0 # count number of accounts in JSON file
 for r in gno_allocation_rows:
-    gno_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
+    # handle multiple accounts on the same file, just sum amounts
+    if gno_distro_object.get(r[0], None):
+        gno_distro_object[r[0]] += Web3.to_wei(r[2], 'gwei')
+    else:
+        gno_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
     # for stats purpose
     allocated_gno += Web3.to_wei(r[2], 'gwei')
+    gno_n_accounts += 1
 
 with open(GNOSIS_DISTRO_JSON_FILE, 'w+') as gno_distro_file:
     gno_distro_file.write(json.dumps(gno_distro_object, indent=4))
+    print("> Gnosis Chain, written %d records" % gno_n_accounts)
 
 
 print("> Ethereum Safe (wei): %f" % allocated_eth)
