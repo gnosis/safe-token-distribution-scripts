@@ -15,6 +15,7 @@ SAFE_ALLOCATION = Decimal(9000000)
 ETHEREUM_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Ethereum.csv"
 GNOSIS_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Gnosis.csv"
 ETHEREUM_RPC_URL = os.getenv('ETHEREUM_RPC_URL')
+GNOSIS_RPC_URL = os.getenv('GNOSIS_RPC_URL')
 
 
 connection = sqlite3.connect("allocations_step1.sql")
@@ -131,7 +132,8 @@ else:
 cursor.execute(ethereum_query)
 ethereum_rows = cursor.fetchall()
 
-w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
+w3_eth = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
+w3_gno = Web3(Web3.HTTPProvider(GNOSIS_RPC_URL))
 os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
 os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
 
@@ -149,13 +151,22 @@ with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as eth_csv:
     for row in ethereum_rows:
         score = "%.10f" % Decimal(row[2])
         allocation = Decimal(row[2])*SAFE_ALLOCATION
-
+        allocate_to_gno = False
         # check if the receiver is an actual EOA or a smart-contract account
-        code = w3.eth.get_code(w3.to_checksum_address(row[0]))
+        code = w3_eth.eth.get_code(w3_eth.to_checksum_address(row[0]))
 
         if not code or code == '0x' or len(code) < 2:
-            # receiver is an EOA, move allocation to Gnosis Chain
+            # receiver is an EOA, move allocation to Gnosis Chain if the address
+            # is not a contract on Gnosis Chain side, otherwise keep on Ethereum side.
             print("> Address %s => %s => %f SAFE" % (row[0], code, float(row[2])))
+            # Check if the address is not a contract on Gnosis Chain side
+            code_gno = w3_gno.eth.get_code(w3_gno.to_checksum_address(row[0]))
+            if not code_gno or code_gno == '0x' or len(code_gno) < 2:
+                allocate_to_gno = True
+            else:
+                print("> Address %s is a contract on Gnosis Chain" % row[0])
+
+        if allocate_to_gno:
             gno_writer.writerow((row[0], score, allocation))
         else:
             eth_writer.writerow((row[0], score, allocation))
