@@ -35,12 +35,12 @@ eth_n_accounts = 0 # count number of accounts in JSON file
 for r in eth_allocation_rows:
     # handle multiple accounts on the same file, just sum amounts
     if eth_distro_object.get(r[0], None):
-        eth_distro_object[r[0]] += Web3.to_wei(r[2], 'gwei')
+        eth_distro_object[r[0]] += Web3.to_wei(r[2], 'ether')
     else:
-        eth_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
+        eth_distro_object[r[0]] = Web3.to_wei(r[2], 'ether')
 
     # for stats purpose
-    allocated_eth += Web3.to_wei(r[2], 'gwei')
+    allocated_eth += Web3.to_wei(r[2], 'ether')
     eth_n_accounts += 1
 
 with open(ETHEREUM_DISTRO_JSON_FILE, 'w+') as eth_distro_file:
@@ -61,11 +61,11 @@ gno_n_accounts = 0 # count number of accounts in JSON file
 for r in gno_allocation_rows:
     # handle multiple accounts on the same file, just sum amounts
     if gno_distro_object.get(r[0], None):
-        gno_distro_object[r[0]] += Web3.to_wei(r[2], 'gwei')
+        gno_distro_object[r[0]] += Web3.to_wei(r[2], 'ether')
     else:
-        gno_distro_object[r[0]] = Web3.to_wei(r[2], 'gwei')
+        gno_distro_object[r[0]] = Web3.to_wei(r[2], 'ether')
     # for stats purpose
-    allocated_gno += Web3.to_wei(r[2], 'gwei')
+    allocated_gno += Web3.to_wei(r[2], 'ether')
     gno_n_accounts += 1
 
 with open(GNOSIS_DISTRO_JSON_FILE, 'w+') as gno_distro_file:
@@ -74,8 +74,8 @@ with open(GNOSIS_DISTRO_JSON_FILE, 'w+') as gno_distro_file:
 
 
 print("> Ethereum Safe (wei): %f" % allocated_eth)
-print("> Ethereum Safe (gwei): %f" % Web3.from_wei(allocated_eth, 'gwei'))
+print("> Ethereum Safe (gwei): %f" % Web3.from_wei(allocated_eth, 'ether'))
 print("> Gnosis Chain Safe (wei): %f" % allocated_gno)
-print("> Gnosis Chain Safe (gwei): %f" % Web3.from_wei(allocated_gno, 'gwei'))
+print("> Gnosis Chain Safe (gwei): %f" % Web3.from_wei(allocated_gno, 'ether'))
 print("> Total allocated Safe (wei): %f" % (allocated_eth+allocated_gno))
-print("> Total allocated Safe (gwei): %f" % Web3.from_wei((allocated_eth+allocated_gno), 'gwei'))
+print("> Total allocated Safe (gwei): %f" % Web3.from_wei((allocated_eth+allocated_gno), 'ether'))
