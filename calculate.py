@@ -3,11 +3,18 @@ import sqlite3
 import csv
 import os
 
+from web3 import Web3
+from dotenv import load_dotenv, dotenv_values 
+
+
+# load variables from .env file
+load_dotenv() 
 
 
 SAFE_ALLOCATION = 9000000
 ETHEREUM_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Ethereum.csv"
 GNOSIS_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Gnosis.csv"
+ETHEREUM_RPC_URL = os.getenv('ETHEREUM_RPC_URL')
 
 
 connection = sqlite3.connect("allocations_step1.sql")
@@ -57,7 +64,6 @@ with open('csv/sGNO_LPs.csv', 'r') as file:
     insert_dml = "INSERT INTO sgno (user, value) VALUES(?, ?)"
     cursor.executemany(insert_dml, rows)
     connection.commit()
-
 
 
 #====================================================================
@@ -115,54 +121,68 @@ ethereum_rows = cursor.fetchall()
 
 csv_header = ["Address", "Score", "Allocation"]
 
+w3 = Web3(Web3.HTTPProvider(ETHEREUM_RPC_URL))
 os.makedirs(os.path.dirname(ETHEREUM_FINAL_ALLOCATION_FILE), exist_ok=True)
-with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
-    writer = csv.writer(f, delimiter=',')
-    writer.writerow(csv_header)
+os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
+
+# Start creating Safe_token_distro_-_Gnosis.csv
+gno_csv = open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='')
+gno_writer = csv.writer(gno_csv, delimiter=',')
+gno_writer.writerow(csv_header)
+
+# Start creating Safe_token_distro_-_Ethereum.csv
+with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as eth_csv:
+    eth_writer = csv.writer(eth_csv, delimiter=',')
+    eth_writer.writerow(csv_header)
+
     for row in ethereum_rows:
         score = "%.10f" % Decimal(row[2])
         allocation = row[2]*SAFE_ALLOCATION
-        writer.writerow((row[0], score, allocation))
+
+        # check if the receiver is an actual EOA or a smart-contract account
+        code = w3.eth.get_code(w3.to_checksum_address(row[0]))
+
+        if not code or code == '0x' or len(code) < 2:
+            # receiver is an EOA, move allocation to Gnosis Chain
+            print("> Address %s => %s => %f SAFE" % (row[0], code, float(row[2])))
+            gno_writer.writerow((row[0], score, allocation))
+        else:
+            eth_writer.writerow((row[0], score, allocation))
 
 
-# Create CSV for GNOSIS
+# Update CSV for GNOSIS, add allocations native to Gnosis Chain
 cursor.execute(gnosis_query)
 gnosis_rows = cursor.fetchall()
 
-os.makedirs(os.path.dirname(GNOSIS_FINAL_ALLOCATION_FILE), exist_ok=True)
-with open(GNOSIS_FINAL_ALLOCATION_FILE, 'w+', newline='') as f:
-    writer = csv.writer(f, delimiter=',')
-    writer.writerow(csv_header)
-    for row in gnosis_rows:
-        score = "%.10f" % Decimal(row[2])
-        allocation = row[2]*SAFE_ALLOCATION
-        writer.writerow((row[0], score, allocation))
+for row in gnosis_rows:
+    score = "%.10f" % Decimal(row[2])
+    allocation = row[2]*SAFE_ALLOCATION
+    gno_writer.writerow((row[0], score, allocation))
 
 connection.close()
-
 
 
 #==============================
 #    DOUBLE-CHECK SCORES
 #==============================
 
-eth_score = 0
-gno_score = 0
+eth_score = Decimal(0)
+gno_score = Decimal(0)
 
 file = open(ETHEREUM_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    eth_score += float(r[1])
+    eth_score += Decimal(r[1])
 
 
 file = open(GNOSIS_FINAL_ALLOCATION_FILE, 'r')
 rows = csv.reader(file)
 next(rows, None)
 for r in rows:
-    gno_score += float(r[1])
+    gno_score += Decimal(r[1])
 
-
+total_score = eth_score + gno_score
 print("> ETH overall score: %f" % eth_score)
 print("> GNO overall score: %f" % gno_score)
-print("> Total score: %f " % (eth_score+gno_score))
+print("> Total score: %f " % total_score)

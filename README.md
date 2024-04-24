@@ -24,7 +24,13 @@ we collect and process the following information in the form of CSV files:
 - calculate sGNOs by owner during the locking period (sGNO_LPs_aggregated.csv)
 - calculate LGNOs in pools by owner on Ethereum Mainnet and Gnosis Chain uring the locking period (LGNO_Gnosis.csv and LGNO_Ethereum.csv)
 
-Based on the figures from above, we calculate distribution through the python script.
+Based on the figures from above, we calculate distributions through the python script, any allocations to EOAs from Ethereum (non smart-contract wallets) are distributed onto Gnosis Chain.
+
+## Installation
+
+Run `python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt`
+
+Create a `.env` file and set the value for `ETHEREUM_RPC_URL`.
 
 
 ## Calculations
