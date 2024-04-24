@@ -11,7 +11,7 @@ from dotenv import load_dotenv, dotenv_values
 load_dotenv() 
 
 
-SAFE_ALLOCATION = 9000000
+SAFE_ALLOCATION = Decimal(9000000)
 ETHEREUM_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Ethereum.csv"
 GNOSIS_FINAL_ALLOCATION_FILE = "csv/allocations/Safe_token_distro_-_Gnosis.csv"
 ETHEREUM_RPC_URL = os.getenv('ETHEREUM_RPC_URL')
@@ -83,34 +83,47 @@ c_4 = cursor.fetchone()
 # cursor.fetchone() returns a tuple (value,)
 n_eligible_users = c_1[0] + c_2[0] + c_3[0] + c_4[0]
 
+# List of addresses that are not receiving the "concrete" airdrop but would still be eligible for it
+allocation_exclusions_not_diluted = ["00 credentials"]
+
+# List of addresses that are not receiving the airdrop, whose tokens are distributed to rest of users 
+allocations_exclusions_diluted = ["0x2686d5e477d1aaa58bf8ce598fa95d97985c7fb1"]
+
 # we know that the sum of all eligible GNOs is equal to 9M SAFEs
 cursor.execute("CREATE TABLE allocations_intermediate (user varchar(255), value float, chain varchar(10))")
 
-cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'ethereum' from lgno_ethereum")
-cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from lgno_gnosis")
-cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from gno_validators")
-cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from sgno")
+# Bring data from multiple CSVs and tables inside allocations_intermediate for further computation
+if len(allocations_exclusions_diluted) > 0:
+    print("> Excluding and diluting allocation for: %s" % ','.join(allocations_exclusions_diluted))
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'ethereum' from lgno_ethereum where lower(user) not in (\"%s\")" % (','.join(allocations_exclusions_diluted)))
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from lgno_gnosis where lower(user) not in (\"%s\")" % (','.join(allocations_exclusions_diluted)))
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from gno_validators where lower(user) not in (\"%s\")" % (','.join(allocations_exclusions_diluted)))
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from sgno where lower(user) not in (\"%s\")" % (','.join(allocations_exclusions_diluted)))
+else:
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'ethereum' from lgno_ethereum")
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from lgno_gnosis")
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from gno_validators")
+    cursor.execute("insert into allocations_intermediate (user, value, chain) select user, value, 'gnosis' from sgno")
 connection.commit()
 
+# Calculate amount of eligible GNO
 cursor.execute("select sum(value) from allocations_intermediate")
-eligible_gno = cursor.fetchone()[0]
+eligible_gno = Decimal(cursor.fetchone()[0])
 
 safe_per_gno = SAFE_ALLOCATION / eligible_gno
-
-print("> Eligible users: %s" % n_eligible_users)
-print("> Eligible GNO: %s" % eligible_gno)
-print("> 1 GNO = %f SAFE" % safe_per_gno)
 
 
 #==============================
 # CALCULATE FINAL ALLOCATIONS
 #==============================
 
-allocation_exclusions = ["00 credentials"]
+# We calculate the "score" as the amount of eligible GNO per user divided by the overall amount of eligible GNO from all users.
+allocations_query_part1 = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"%s\""
 
-if len(allocation_exclusions) > 0:
-    ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"ethereum\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
-    gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"gnosis\" and user not in (\"%s\") group by user" % (eligible_gno, ','.join(allocation_exclusions))
+if len(allocation_exclusions_not_diluted) > 0:
+    print("> Excluding but not diluting allocation for: %s" % ','.join(allocation_exclusions_not_diluted))
+    ethereum_query = allocations_query_part1 % (eligible_gno, 'ethereum') + " and lower(user) not in (\"%s\") group by user" % (','.join(allocation_exclusions_not_diluted))
+    gnosis_query = allocations_query_part1 % (eligible_gno, 'gnosis') + " and lower(user) not in (\"%s\") group by user" % (','.join(allocation_exclusions_not_diluted))
 else:
     ethereum_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"ethereum\" group by user" % (eligible_gno)
     gnosis_query = "select user, sum(value) as user_gno, (sum(value)*1)/%f as score from allocations_intermediate where chain = \"gnosis\" group by user" % (eligible_gno)
@@ -137,7 +150,7 @@ with open(ETHEREUM_FINAL_ALLOCATION_FILE, 'w+', newline='') as eth_csv:
 
     for row in ethereum_rows:
         score = "%.10f" % Decimal(row[2])
-        allocation = row[2]*SAFE_ALLOCATION
+        allocation = Decimal(row[2])*SAFE_ALLOCATION
 
         # check if the receiver is an actual EOA or a smart-contract account
         code = w3.eth.get_code(w3.to_checksum_address(row[0]))
@@ -156,7 +169,7 @@ gnosis_rows = cursor.fetchall()
 
 for row in gnosis_rows:
     score = "%.10f" % Decimal(row[2])
-    allocation = row[2]*SAFE_ALLOCATION
+    allocation = Decimal(row[2])*SAFE_ALLOCATION
     gno_writer.writerow((row[0], score, allocation))
 
 connection.close()
@@ -183,6 +196,11 @@ for r in rows:
     gno_score += Decimal(r[1])
 
 total_score = eth_score + gno_score
+print("============= STATS =============")
+print("> Eligible users: %s" % n_eligible_users)
+print("> Eligible GNO: %s" % eligible_gno)
+print("> 1 GNO = %f SAFE" % safe_per_gno)
 print("> ETH overall score: %f" % eth_score)
 print("> GNO overall score: %f" % gno_score)
 print("> Total score: %f " % total_score)
+print("=================================")
